@@ -26,13 +26,13 @@ defaultContentLanguageInSubdir = false
 #  organization = ""
 #  organization_url = ""
 #  avatar = "Profile-Picture.jpg"
-#  email = "brendan.molin@gmail.com"
+#  email = ""
   address = ""
   office_hours = ""
   phone = ""
   skype = ""
   telegram = ""
-#  twitter = "bmo_molin"
+#  twitter = ""
   github = "kaydencekawa"
 
   # Enable Keybase in Contact section by entering your keybase.io username.
@@ -129,17 +129,17 @@ defaultContentLanguageInSubdir = false
   #[[params.social]]
   #  icon = "paper-plane"
   #  icon_pack = "fa"
-  #  link = "mailto:brendan.molin@gmail.com"
+  #  link = ""
 
   #[[params.social]]
   #  icon = "twitter"
   #  icon_pack = "fa"
-  #  link = "//twitter.com/bmo_molin"
+  #  link = ""
 
   [[params.social]]
     icon = "github"
     icon_pack = "fa"
-    link = "//github.com/brendanmolin"
+    link = "//github.com/kaydencekawa"
     
   [[params.social]]
     icon = "linkedin"
