@@ -1,0 +1,230 @@
+---
+title: The Best Writers and Directors of The Office
+author: Kaydence Kawa
+date: '2020-12-12'
+slug: A data analysis of the writers and directors behind the hit NBC TV show The
+  Office
+categories: []
+tags: []
+header:
+  caption: ''
+  image: ''
+  preview: ''
+highlight: yes
+math: no
+---
+
+<link href="/rmarkdown-libs/anchor-sections/anchor-sections.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/anchor-sections/anchor-sections.js"></script>
+
+
+<p>Like all millenials, I’m a big fan of The Office. I was excited to find this dataset via tidytuesday and decided to look at who the highest rated writers and directers are. Spoiler: Mindy Kaling did a lot more than play Kelly Kapoor.</p>
+<p>Data for this analysis is from the schrute R package for The Office transcripts and data.world for IMDB ratings of each episode.</p>
+<p>Link to Data: <a href="https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-03-17/readme.md" class="uri">https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-03-17/readme.md</a></p>
+<p>I analyzed this data using R; the first section includes downloading and cleaning the data and the second section looks at which writers wrote the most episodes, who was the highest rated writer, and which writer and director combinations get the highest ratings.</p>
+<div id="import-and-clean-data" class="section level2">
+<h2>Import and Clean Data</h2>
+<p>You may need to install.packages(“schrute”). The schrute package includes lines by character, the writers, and director for each episode.</p>
+<pre class="r"><code>library(dplyr)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:stats&#39;:
+## 
+##     filter, lag</code></pre>
+<pre><code>## The following objects are masked from &#39;package:base&#39;:
+## 
+##     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(schrute)</code></pre>
+<pre><code>## Warning: package &#39;schrute&#39; was built under R version 3.6.3</code></pre>
+<pre class="r"><code>library(tidyr)</code></pre>
+<pre><code>## Warning: package &#39;tidyr&#39; was built under R version 3.6.3</code></pre>
+<pre class="r"><code>library(ggplot2)</code></pre>
+<p>The office_ratings.csv includes IMDb ratings for each episode of The Office.</p>
+<pre class="r"><code>office_ratings &lt;- readr::read_csv(&#39;https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-17/office_ratings.csv&#39;)</code></pre>
+<pre><code>## Parsed with column specification:
+## cols(
+##   season = col_double(),
+##   episode = col_double(),
+##   title = col_character(),
+##   imdb_rating = col_double(),
+##   total_votes = col_double(),
+##   air_date = col_date(format = &quot;&quot;)
+## )</code></pre>
+<pre class="r"><code>episode_text &lt;- schrute::theoffice</code></pre>
+<p>Clean episode_dir_writer to get one record per episode. There is a row for each line, so the director and writer columns are repeated for each line in the episode. For now, we want one row for each writer and director of an episode.</p>
+<pre class="r"><code>episode_dir_writer &lt;- episode_text[,2:6]
+
+episode_dir_writer &lt;-
+  distinct(episode_dir_writer)</code></pre>
+<p>We have a different number of lines for the office_ratings df and the episode_dir_writer df. Since there’s one rating for each episode, and now we have one line for each writer and a director of an episode, the dataframes should be the same size.</p>
+<pre class="r"><code>episode_dir_writer$season_episode &lt;- paste(episode_dir_writer$season, episode_dir_writer$episode)
+office_ratings$season_episode &lt;- paste(office_ratings$season, office_ratings$episode)
+results1 = setdiff(office_ratings$season_episode, episode_dir_writer$season_episode)
+results1</code></pre>
+<pre><code>##  [1] &quot;3 11&quot; &quot;4 2&quot;  &quot;4 4&quot;  &quot;4 6&quot;  &quot;4 8&quot;  &quot;5 2&quot;  &quot;5 15&quot; &quot;6 5&quot;  &quot;6 18&quot; &quot;7 12&quot;
+## [11] &quot;9 23&quot;</code></pre>
+<p>For two part episodes, episode_dir_writer counts them as two episodes, office_ratings counts them as 1.
+The episodes above are not in episode_dir_writer because the episode before was two parts and the data goes from episode 10 to 12 to accomodate. We need to create a new episode count for episode_dir_writer where 2 part episodes are counted as 1 episode.</p>
+<pre class="r"><code>episode_dir_writer$counter &lt;- 1
+
+episode_dir_writer &lt;- 
+  episode_dir_writer %&gt;%
+  group_by(season) %&gt;%
+  mutate(episode_reorder = cumsum(counter))
+
+episode_dir_writer$season_episode &lt;- paste(episode_dir_writer$season, episode_dir_writer$episode_reorder)
+
+results2 = setdiff(office_ratings$season_episode, episode_dir_writer$season_episode)
+results2</code></pre>
+<pre><code>## [1] &quot;6 25&quot; &quot;6 26&quot;</code></pre>
+<p>office_ratings doesn’t always treat two part episodes the same way (some are 1 record, some are 2). We need to create two rows for two part episodes that are in a single row for season 6 of the episode_dir_writer df (rows 95 &amp; 96, and 108 &amp; 109).</p>
+<pre class="r"><code>episode_dir_writer %&gt;%
+  filter(grepl(&quot;Parts 1&amp;2&quot;, episode_name)) %&gt;%
+  filter(season == 6)</code></pre>
+<pre><code>## # A tibble: 2 x 8
+## # Groups:   season [1]
+##   season episode episode_name director writer season_episode counter
+##    &lt;int&gt;   &lt;int&gt; &lt;chr&gt;        &lt;chr&gt;    &lt;chr&gt;  &lt;chr&gt;            &lt;dbl&gt;
+## 1      6       4 Niagara (Pa… Paul Fe… Greg … 6 4                  1
+## 2      6      17 The Deliver… Seth Go… Danie… 6 16                 1
+## # … with 1 more variable: episode_reorder &lt;dbl&gt;</code></pre>
+<p>We duplicate rows so that each two part episode in season 6 is 2 rows.</p>
+<pre class="r"><code>episode_dir_writer &lt;- rbind(episode_dir_writer, episode_dir_writer[rep(95, 1),])
+episode_dir_writer &lt;- rbind(episode_dir_writer, episode_dir_writer[rep(107, 1),])</code></pre>
+<p>Then we resort and rerun episode reorder.</p>
+<pre class="r"><code>episode_dir_writer &lt;-
+  episode_dir_writer %&gt;%
+  arrange(season, episode) %&gt;%
+  group_by(season) %&gt;%
+  mutate(episode_reorder = cumsum(counter))
+
+episode_dir_writer$season_episode &lt;- paste(episode_dir_writer$season, episode_dir_writer$episode_reorder)</code></pre>
+<p>Then we have the same number and order of episodes, we can merge the tables.</p>
+<pre class="r"><code>office_data &lt;- merge(episode_dir_writer, office_ratings, by.x = &#39;season_episode&#39;, by.y = &#39;season_episode&#39;)</code></pre>
+</div>
+<div id="which-writers-have-the-higest-rated-episodes" class="section level2">
+<h2>Which Writers Have the Higest Rated Episodes?</h2>
+<p>In this analysis, we are comparing writers based on their writing credits. There can be more than one writer credit per episode, so there will be some overlap between writers when we compare episode credits and ratings.</p>
+<p>Mindy Kaling received the most writer credits, with B.J. Novak and Paul Lieberstein rounding out the top group of writers.</p>
+<pre class="r"><code>episodes_per_writer &lt;- 
+  office_data %&gt;%
+  select(writer) %&gt;%
+  group_by(writer) %&gt;%
+  mutate(count_writer = n()) %&gt;%
+  distinct()
+
+ggplot(episodes_per_writer ) +
+  geom_bar(aes(reorder(writer, count_writer), count_writer),
+           alpha = 1, stat=&quot;identity&quot;, fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Most Frequent Writers&quot;) +
+  labs(x=&quot;Writer&quot;, y=&quot;Number of Episodes&quot;) +
+  theme_gray() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5),
+        axis.title = element_text(size = 14)) +
+  coord_flip()</code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p>The Paul Lieberstein &amp; Michael Schur team has the highest average rating, followed by the Greg Daniels &amp; Mindy Kaling team. Greg Daniels and Paul Lieberstein also collaborated with Jennifer Celotta on highly rated episodes. Greg Daniels also wrote at least one highly rated episode on his own.</p>
+<pre class="r"><code>rating_per_writer &lt;- 
+  office_data %&gt;%
+  group_by(writer) %&gt;%
+  summarise_at(vars(imdb_rating), mean) 
+
+ggplot(rating_per_writer) +
+  geom_bar(aes(reorder(writer, imdb_rating), imdb_rating),
+           alpha = 1, stat=&quot;identity&quot;,fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Highest Rated Writers&quot;) +
+  labs(x=&quot;Writer&quot;, y=&quot;IMDB Rating&quot;) +
+  theme_gray() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5),
+        axis.title = element_text(size = 14)) +
+  coord_flip()</code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+<p>Randall Einhorn, Paul Feig, and Greg Daniels all directed over 12 episodes. There’s also a number of actors who got the chance to direct. B.J. Novak, Steve Carrell, Rainn Wilson, John Krasinski, Mindy Kaling, and Ed Helms all directed a handful of episodes each.</p>
+<pre class="r"><code>episodes_per_director &lt;- 
+  office_data %&gt;%
+  select(director) %&gt;%
+  group_by(director) %&gt;%
+  mutate(count_director = n()) %&gt;%
+  distinct()
+
+ggplot(episodes_per_director) +
+  geom_bar(aes(reorder(director, count_director), count_director),
+           alpha = 1, stat=&quot;identity&quot;,fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Most Frequent Director&quot;) +
+  labs(x=&quot;Director&quot;, y=&quot;Number of Episodes&quot;) +
+  theme_gray() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5),
+        axis.title = element_text(size = 14)) +
+  coord_flip()</code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-12-1.png" width="672" /></p>
+<p>Harold Rarris and Steve Carell have the highest average rating per episode for directors. It’s worth noting that these two didn’t direct too many episodes, less than 5 each. Paul Feig had a high average rating, and directed 15 episodes. The overall spread in average rating for directors is small, the minimum is 7.1, and the maximum is 8.9.</p>
+<pre class="r"><code>rating_per_director &lt;- 
+  office_data %&gt;%
+  group_by(director) %&gt;%
+  summarise_at(vars(imdb_rating), mean) 
+
+ggplot(rating_per_director) +
+  geom_bar(aes(reorder(director, imdb_rating), imdb_rating),
+           alpha = 1, stat=&quot;identity&quot;,fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Highest Rated Directors&quot;) +
+  labs(x=&quot;Director&quot;, y=&quot;IMDB Rating&quot;) +
+  theme_grey() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 18),
+        plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5),
+        axis.title = element_text(size = 20)) +
+  coord_flip()</code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-13-1.png" width="672" /></p>
+<p>Next I looked at which writer and director together get the highest average rated episodes. The same writers and directors don’t work together that often (more on that below), so the chart only shows groups that had an average rating over 9. For this metric, Greg Daniels and Steve Carell have the highest average rating.</p>
+<pre class="r"><code>office_data$director_and_writer &lt;- paste(office_data$director, office_data$writer, sep = &quot;&amp;&quot;)
+
+rating_per_dir_and_writer &lt;- 
+  office_data %&gt;%
+  group_by(director_and_writer) %&gt;%
+  summarise_at(vars(imdb_rating), mean) 
+
+ggplot(rating_per_dir_and_writer %&gt;% filter(imdb_rating &gt; 9)) +
+  geom_bar(aes(reorder(director_and_writer, -imdb_rating), imdb_rating),
+           alpha = 1, stat=&quot;identity&quot;, fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Writer &amp; Director Combo&quot;) +
+  labs(x=&quot;Writer &amp; Director&quot;, y=&quot;IMDB Rating&quot;) +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) </code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-14-1.png" width="672" /></p>
+<p>Greg Daniels and Steve Carell only write and direct one episode together, and that episode was Casino Night, a season finale.</p>
+<pre class="r"><code>office_data %&gt;%
+  filter(director == &#39;Greg Daniels&#39;) %&gt;%
+  filter(writer == &#39;Steve Carell&#39;) %&gt;%
+  nrow()</code></pre>
+<pre><code>## [1] 1</code></pre>
+<pre class="r"><code>office_data %&gt;%
+  filter(director == &#39;Greg Daniels&#39;) %&gt;%
+  filter(writer == &#39;Steve Carell&#39;)</code></pre>
+<pre><code>##   season_episode season.x episode.x episode_name     director       writer
+## 1           2 22        2        22 Casino Night Greg Daniels Steve Carell
+##   counter episode_reorder season.y episode.y        title imdb_rating
+## 1       1              22        2        22 Casino Night         9.3
+##   total_votes   air_date       director_and_writer
+## 1        3644 2006-05-11 Greg Daniels&amp;Steve Carell</code></pre>
+<p>The same director and group of writers don’t work together that often. There are only five pairs of writers and directors who work with one another more than twice. Of those who worked together more than once, Paul Feig &amp; Greg Daniels and Mindy Kaling had the highest average rating.</p>
+<pre class="r"><code>episodes_per_writer_director &lt;- 
+  office_data %&gt;%
+  group_by(director_and_writer) %&gt;%
+  summarise(count_director_and_writer = n(), imdb_rating = mean(imdb_rating)) %&gt;%
+  filter(count_director_and_writer &gt; 1)
+
+ggplot(episodes_per_writer_director) +
+  geom_bar(aes(reorder(director_and_writer, imdb_rating), imdb_rating),
+           alpha = 1, stat=&quot;identity&quot;, fill=&quot;steelblue&quot;) +
+  labs(title=&quot;Highest Rated Writer &amp; Director Combo&quot;) +
+  labs(x=&quot;Writer &amp; Director&quot;, y=&quot;IMDB Rating&quot;) +
+  theme_grey() +
+  coord_flip()</code></pre>
+<p><img src="/post/2020-12-12-the-office-writer-director/analysis_files/figure-html/unnamed-chunk-16-1.png" width="672" /></p>
+</div>
