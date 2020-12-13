@@ -110,8 +110,7 @@ episode_dir_writer$season_episode &lt;- paste(episode_dir_writer$season, episode
   office_data %&gt;%
   select(writer) %&gt;%
   group_by(writer) %&gt;%
-  mutate(count_writer = n()) %&gt;%
-  distinct()
+  summarise(count_writer = n())
 
 ggplot(episodes_per_writer ) +
   geom_bar(aes(reorder(writer, count_writer), count_writer),
@@ -129,7 +128,7 @@ ggplot(episodes_per_writer ) +
 <pre class="r"><code>rating_per_writer &lt;- 
   office_data %&gt;%
   group_by(writer) %&gt;%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_writer) +
   geom_bar(aes(reorder(writer, imdb_rating), imdb_rating),
@@ -148,8 +147,7 @@ ggplot(rating_per_writer) +
   office_data %&gt;%
   select(director) %&gt;%
   group_by(director) %&gt;%
-  mutate(count_director = n()) %&gt;%
-  distinct()
+  summarise(count_director = n())
 
 ggplot(episodes_per_director) +
   geom_bar(aes(reorder(director, count_director), count_director),
@@ -167,7 +165,7 @@ ggplot(episodes_per_director) +
 <pre class="r"><code>rating_per_director &lt;- 
   office_data %&gt;%
   group_by(director) %&gt;%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_director) +
   geom_bar(aes(reorder(director, imdb_rating), imdb_rating),
@@ -187,7 +185,7 @@ ggplot(rating_per_director) +
 rating_per_dir_and_writer &lt;- 
   office_data %&gt;%
   group_by(director_and_writer) %&gt;%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_dir_and_writer %&gt;% filter(imdb_rating &gt; 9)) +
   geom_bar(aes(reorder(director_and_writer, -imdb_rating), imdb_rating),
@@ -216,7 +214,8 @@ ggplot(rating_per_dir_and_writer %&gt;% filter(imdb_rating &gt; 9)) +
 <pre class="r"><code>episodes_per_writer_director &lt;- 
   office_data %&gt;%
   group_by(director_and_writer) %&gt;%
-  summarise(count_director_and_writer = n(), imdb_rating = mean(imdb_rating)) %&gt;%
+  summarise(count_director_and_writer = n(), 
+            imdb_rating = mean(imdb_rating)) %&gt;%
   filter(count_director_and_writer &gt; 1)
 
 ggplot(episodes_per_writer_director) +

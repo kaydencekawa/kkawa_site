@@ -125,8 +125,7 @@ episodes_per_writer <-
   office_data %>%
   select(writer) %>%
   group_by(writer) %>%
-  mutate(count_writer = n()) %>%
-  distinct()
+  summarise(count_writer = n())
 
 ggplot(episodes_per_writer ) +
   geom_bar(aes(reorder(writer, count_writer), count_writer),
@@ -148,7 +147,7 @@ The Paul Lieberstein & Michael Schur team has the highest average rating, follow
 rating_per_writer <- 
   office_data %>%
   group_by(writer) %>%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_writer) +
   geom_bar(aes(reorder(writer, imdb_rating), imdb_rating),
@@ -170,8 +169,7 @@ episodes_per_director <-
   office_data %>%
   select(director) %>%
   group_by(director) %>%
-  mutate(count_director = n()) %>%
-  distinct()
+  summarise(count_director = n())
 
 ggplot(episodes_per_director) +
   geom_bar(aes(reorder(director, count_director), count_director),
@@ -193,7 +191,7 @@ Harold Rarris and Steve Carell have the highest average rating per episode for d
 rating_per_director <- 
   office_data %>%
   group_by(director) %>%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_director) +
   geom_bar(aes(reorder(director, imdb_rating), imdb_rating),
@@ -216,7 +214,7 @@ office_data$director_and_writer <- paste(office_data$director, office_data$write
 rating_per_dir_and_writer <- 
   office_data %>%
   group_by(director_and_writer) %>%
-  summarise_at(vars(imdb_rating), mean) 
+  summarise(imdb_rating = mean(imdb_rating)) 
 
 ggplot(rating_per_dir_and_writer %>% filter(imdb_rating > 9)) +
   geom_bar(aes(reorder(director_and_writer, -imdb_rating), imdb_rating),
@@ -246,7 +244,8 @@ The same director and group of writers don't work together that often. There are
 episodes_per_writer_director <- 
   office_data %>%
   group_by(director_and_writer) %>%
-  summarise(count_director_and_writer = n(), imdb_rating = mean(imdb_rating)) %>%
+  summarise(count_director_and_writer = n(), 
+            imdb_rating = mean(imdb_rating)) %>%
   filter(count_director_and_writer > 1)
 
 ggplot(episodes_per_writer_director) +
