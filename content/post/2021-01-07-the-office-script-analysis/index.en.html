@@ -1,0 +1,420 @@
+---
+title: The Office Script Analysis
+author: Kaydence Kawa
+date: '2021-01-07'
+slug: []
+categories: []
+tags: []
+header:
+  caption: ''
+  image: ''
+  preview: ''
+highlight: yes
+math: no
+---
+
+<link href="/rmarkdown-libs/anchor-sections/anchor-sections.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/anchor-sections/anchor-sections.js"></script>
+
+
+<p>In <a href="https://kaydencekawa.netlify.app/post/2020-12-12-the-office-writer-director/a-data-analysis-of-the-writers-and-directors-behind-the-hit-nbc-tv-show-the-office/">Part One of my data analysis of The Office</a>, I looked at the writers and directors behind the series and how they correlated with episode ratings. In Part Two, I’m analyzing the transcript of the episodes to learn about character sentiment, word choice, line frequency, and dialogue partners.</p>
+<div id="import-and-clean-data" class="section level2">
+<h2>Import and Clean Data</h2>
+<p>You may need to install.packages(“schrute”). The schrute package includes lines by character, the writers, and director for each episode.</p>
+<p>NRC lexicon data source: <a href="https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm" class="uri">https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm</a></p>
+<p>Code Guide: <a href="https://www.tidytextmining.com/sentiment.html" class="uri">https://www.tidytextmining.com/sentiment.html</a></p>
+<pre class="r"><code>library(dplyr)
+library(schrute)
+library(tidyr)
+library(ggplot2)
+library(tidytext)
+library(textdata)
+library(scales)
+library(ggnetwork)
+
+episode_text &lt;- schrute::theoffice</code></pre>
+<p>This line converts all of the text to the tidy format, so that break down the text into one word per row, while keeping all of the metadata about the episode intact.</p>
+<pre class="r"><code>episode_text_parse &lt;- episode_text %&gt;%
+  unnest_tokens(word, text)</code></pre>
+</div>
+<div id="most-common-words-and-most-number-of-lines-per-character" class="section level2">
+<h2>Most Common Words and Most Number of Lines per Character</h2>
+<p>Excluding stop words, the most common words include greetings and the names of important characters (Michael, Dwight, Jim). Interesting that “call” and “stop” are on there, brings to mind either Michael or Dwight interrupting Jim’s sales calls. Because there are so many words, this chart only shows those that are said over 500 times.</p>
+<pre class="r"><code>episode_text_parse %&gt;%
+  filter(!word %in% stop_words$word) %&gt;% 
+  count(word, sort = TRUE) %&gt;%
+  mutate(word = reorder(word, n)) %&gt;%
+  filter(n &gt; 500) %&gt;%
+  ggplot(aes(word, n)) +
+  geom_col(fill=&quot;steelblue&quot;) +
+  xlab(NULL) +
+  coord_flip()</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+<p>Michael has the most number of lines by far, despite not being in the last two seasons. It’s a little surprising to see Andy at the top, since he also wasn’t in all of the seasons. It’s worth noting that not all of the character names follow the same format. There are character names in quotes (“Angela”), lines the characters said together (Andy &amp; Erin), and hilariously, Goldenface has his own lines. This chart only includes characters with at least 500 lines over the course of the series.</p>
+<pre class="r"><code>number_of_lines &lt;-
+  episode_text %&gt;%
+  group_by(character) %&gt;%
+  summarise(num_lines = n())
+
+ggplot(number_of_lines %&gt;% filter(num_lines &gt; 500)) +
+  geom_bar(aes(reorder(character, -num_lines), num_lines),
+           alpha = 1, stat = &quot;identity&quot;, fill = &quot;steelblue&quot;) +
+  labs(title=&quot;Characters with the Most Lines&quot;) +
+  labs(x=&quot;Character&quot;, y=&quot;Number of Lines&quot;)  +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p>There are 9 seasons of the office. Steve Carell is in season 9, but only very briefly, he left the show in season 7. Ed Helms joined The Office in season 3, but played a bigger role in later seasons.</p>
+<pre class="r"><code>linesperseason &lt;-
+  episode_text %&gt;%
+    group_by(character, season) %&gt;%
+    summarise(num_lines = n())
+
+ggplot(linesperseason %&gt;% filter(character %in% c(&quot;Michael&quot;, &quot;Andy&quot;)), aes(season, num_lines)) +
+  geom_col(show.legend = FALSE, fill = &quot;steelblue&quot;) +
+  facet_wrap(~character, ncol = 2) +
+  labs(title=&quot;Number of Lines per Season for Andy and Michael&quot;) +
+  labs(x=&quot;Season&quot;, y=&quot;Number of Lines&quot;)  +
+  theme_grey() +  
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_discrete(&quot;Season&quot;, limits = c(1:9))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+</div>
+<div id="sentiment-analysis-of-the-office" class="section level2">
+<h2>Sentiment Analysis of The Office</h2>
+<p>For part 1, we’ll look at individual words.</p>
+<p>“good” and “god” are common joy words in The Office. Not sure about this is very accurate sentiment of this word, because all I can think of is Michael Scott shouting “Oh god! No god, please no!” when he sees Toby for the first time after like 6 months.</p>
+<pre class="r"><code>nrc_joy &lt;- get_sentiments(&quot;nrc&quot;) %&gt;% 
+  filter(sentiment == &quot;joy&quot;)
+
+joy_words_office &lt;-
+episode_text_parse %&gt;%
+  inner_join(nrc_joy) %&gt;%
+  count(word, sort = TRUE)
+
+ggplot(joy_words_office %&gt;% filter(n&gt;55)) +
+  geom_bar(aes(reorder(word, -n), n),
+           alpha = 1, stat = &quot;identity&quot;, fill = &quot;steelblue&quot;) +
+  labs(title=&quot;Most Common Joy Words&quot;) +
+  labs(x=&quot;Word&quot;, y=&quot;Frequency&quot;)  +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>“idiot” is pretty high up in the list of ‘disgust’ sentiment words! Bonus wisdom from Dwight Scrute- “Whenever I’m about to do something, I think, ‘Would an idiot do that?’ And if they would, I do not do that thing.”</p>
+<pre class="r"><code>nrc_disgust &lt;- get_sentiments(&quot;nrc&quot;) %&gt;% 
+  filter(sentiment == &quot;disgust&quot;)
+
+episode_text_parse %&gt;%
+  inner_join(nrc_disgust) %&gt;%
+  count(word, sort = TRUE)</code></pre>
+<pre><code>## # A tibble: 499 x 2
+##    word         n
+##    &lt;chr&gt;    &lt;int&gt;
+##  1 bad        316
+##  2 weird      205
+##  3 hate       163
+##  4 damn       137
+##  5 hell       133
+##  6 terrible   130
+##  7 boy        111
+##  8 lose        91
+##  9 sick        91
+## 10 idiot       88
+## # … with 489 more rows</code></pre>
+<p>Across all nine seasons, The Office has a really positive sentiment, and for most seasons there’s a peak towards the end for the season finale. It’s no wonder we can’t stop watching it.</p>
+<pre class="r"><code>the_office_sentiment &lt;-
+episode_text_parse %&gt;%
+  inner_join(get_sentiments(&quot;bing&quot;), by = &quot;word&quot;) %&gt;%
+  count(season, index = episode, sentiment) %&gt;%
+  spread(sentiment, n, fill = 0) %&gt;%
+  mutate(sentiment = positive - negative) %&gt;%
+  mutate(color = ifelse(sentiment &lt; 0, &quot;red&quot;,&quot;green4&quot;))
+
+ggplot(the_office_sentiment, aes(index, sentiment, fill = color)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~season, ncol = 3, scales = &quot;free_x&quot;) +
+  labs(title=&quot;Sentiment over The Office Seasons&quot;) +
+  labs(x=&quot;Season&quot;, y=&quot;Sentiment&quot;)  +
+  theme_grey() +  
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_identity(guide = FALSE)</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p>This confirms what we could see in the chart above, there’s very little negative sentiment.</p>
+<pre class="r"><code>summary(the_office_sentiment$sentiment)</code></pre>
+<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   -3.00   45.25   62.50   65.73   82.00  186.00</code></pre>
+<p>Season 3 episode 20 is the only episode with negative sentiment.</p>
+<pre class="r"><code>the_office_sentiment %&gt;%
+  filter(sentiment &lt; 0)</code></pre>
+<pre><code>## # A tibble: 1 x 6
+##   season index negative positive sentiment color
+##    &lt;int&gt; &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;
+## 1      3    20      127      124        -3 red</code></pre>
+<p>That’s the Safety Training episode! So this makes sense, it probably has something to do with Michael Scott standing on the building shouting about the stress of his modern office.</p>
+<pre class="r"><code>episode_text_parse %&gt;%
+  filter(season == 3, episode == 20) %&gt;%
+  inner_join(get_sentiments(&quot;bing&quot;)) %&gt;% 
+  select(episode_name, word, sentiment)</code></pre>
+<pre><code>## # A tibble: 251 x 3
+##    episode_name    word    sentiment
+##    &lt;chr&gt;           &lt;chr&gt;   &lt;chr&gt;    
+##  1 Safety Training good    positive 
+##  2 Safety Training like    positive 
+##  3 Safety Training welcome positive 
+##  4 Safety Training like    positive 
+##  5 Safety Training wins    positive 
+##  6 Safety Training rich    positive 
+##  7 Safety Training sorry   negative 
+##  8 Safety Training strange negative 
+##  9 Safety Training anger   negative 
+## 10 Safety Training wrong   negative 
+## # … with 241 more rows</code></pre>
+<p>Positive sentiment words that occur most frequently are “like” and “right”, the chart is limited to display only words that occur more that 500 times.</p>
+<pre class="r"><code>sentiment_word_count &lt;-
+  episode_text_parse %&gt;%
+  inner_join(get_sentiments(&quot;bing&quot;), by = &quot;word&quot;) %&gt;%
+  count(word, sentiment, sort = TRUE) %&gt;%
+  ungroup()
+
+
+ggplot(sentiment_word_count %&gt;% filter(sentiment == &quot;positive&quot;, n &gt; 500)) +
+  geom_bar(aes(reorder(word, -n), n),
+           alpha = 1, stat = &quot;identity&quot;, fill = &quot;steelblue&quot;) +
+  labs(title=&quot;Most Common Positive Words&quot;) +
+  labs(x=&quot;Word&quot;, y=&quot;Frequency&quot;)  +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-14-1.png" width="672" /></p>
+<p>The most frequent negative sentiment words are “sorry” and “bad”. The volume of these words is much lower than the positive sentiment ones. It’s also a little strange that “funny” is considered a negative word.</p>
+<pre class="r"><code>ggplot(sentiment_word_count %&gt;% filter(sentiment == &quot;negative&quot;, n &gt; 150)) +
+  geom_bar(aes(reorder(word, -n), n),
+           alpha = 1, stat = &quot;identity&quot;, fill = &quot;steelblue&quot;) +
+  labs(title=&quot;Most Common Negative Words&quot;) +
+  labs(x=&quot;Word&quot;, y=&quot;Frequency&quot;)  +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-15-1.png" width="672" /></p>
+<p>Michael Scott has a mostly positive sentiment, but there are a few episodes where he has an overall negative sentiment.</p>
+<pre class="r"><code>the_office_sentiment_Michael &lt;-
+episode_text_parse %&gt;%
+  filter(character == &quot;Michael&quot;) %&gt;%
+  inner_join(get_sentiments(&quot;bing&quot;), by = &quot;word&quot;) %&gt;%
+  count(season, index = episode, sentiment) %&gt;%
+  spread(sentiment, n, fill = 0) %&gt;%
+  mutate(sentiment = positive - negative) %&gt;%
+  mutate(color = ifelse(sentiment &lt; 0, &quot;red&quot;,&quot;green4&quot;))
+
+ggplot(the_office_sentiment_Michael, aes(index, sentiment, fill = color)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~season, ncol = 3, scales = &quot;free_x&quot;) +
+  labs(title=&quot;Michael Scott Sentiment over The Office Seasons&quot;) +
+  labs(x=&quot;Season&quot;, y=&quot;Sentiment&quot;)  +
+  theme_grey() +  
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_identity(guide = FALSE)</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-16-1.png" width="672" /></p>
+<p>Michael Scott has negative sentiment in Traveling Salesman, Safety Training, Customer Survey, Frame Toby, Koi Pond, and Counseling. These all involve either bad things happening to Michael (falling into a koi pond) or Michael doing bad things (framing Toby). My only remaining question on this is WHERE is the episode where Michael grills his foot?!</p>
+<pre class="r"><code>the_office_sentiment_Michael %&gt;%
+  filter(sentiment &lt; 0)</code></pre>
+<pre><code>## # A tibble: 6 x 6
+##   season index negative positive sentiment color
+##    &lt;int&gt; &lt;int&gt;    &lt;dbl&gt;    &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;
+## 1      3    13       20       18        -2 red  
+## 2      3    20       59       44       -15 red  
+## 3      5     7       23       14        -9 red  
+## 4      5     9       38       30        -8 red  
+## 5      6     8       42       34        -8 red  
+## 6      7     2       37       14       -23 red</code></pre>
+<pre class="r"><code>episode_text %&gt;%  
+  filter((season == 3 &amp; episode %in% c(13,20))
+         |(season == 5 &amp; episode %in% c(7,9))
+         | (season == 6 &amp; episode == 8)
+         | (season == 7 &amp; episode == 2)
+         ) %&gt;%
+  distinct(episode_name, season, episode)</code></pre>
+<pre><code>## # A tibble: 6 x 3
+##   episode_name       season episode
+##   &lt;chr&gt;               &lt;int&gt;   &lt;int&gt;
+## 1 Traveling Salesmen      3      13
+## 2 Safety Training         3      20
+## 3 Customer Survey         5       7
+## 4 Frame Toby              5       9
+## 5 Koi Pond                6       8
+## 6 Counseling              7       2</code></pre>
+<p>Dwight is way more sinister! The Angela cheating on Dwight plot line is part of seasons 5 and 6, so the drop in season 6 makes sense. His positive sentiment gets a bump in seasons 8 and 9 after Michael leaves. He and Jim become friends and he gets back together with Angela in those seasons.</p>
+<pre class="r"><code>the_office_sentiment_Dwight &lt;-
+episode_text_parse %&gt;%
+  filter(character == &quot;Dwight&quot;) %&gt;%
+  inner_join(get_sentiments(&quot;bing&quot;), by = &quot;word&quot;) %&gt;%
+  count(season, index = episode, sentiment) %&gt;%
+  spread(sentiment, n, fill = 0) %&gt;%
+  mutate(sentiment = positive - negative) %&gt;%
+  mutate(color = ifelse(sentiment &lt; 0, &quot;red&quot;,&quot;green4&quot;))
+
+ggplot(the_office_sentiment_Dwight, aes(index, sentiment, fill = color)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~season, ncol = 3, scales = &quot;free_x&quot;) +
+  labs(title=&quot;Dwight Schrute Sentiment over The Office Seasons&quot;) +
+  labs(x=&quot;Season&quot;, y=&quot;Sentiment&quot;)  +
+  theme_grey() +  
+  theme(plot.title = element_text(hjust = 0.5)) +
+    scale_fill_identity(guide = FALSE)</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-18-1.png" width="672" /></p>
+</div>
+<div id="text-analysis-groups-of-words" class="section level2">
+<h2>Text Analysis: Groups of Words</h2>
+<p>Now we’ll look at groups of words together. I’m grouping words by 5.</p>
+<p>The missing word_group is from there being less than five words in a single line. It’s funny that the list of the most common five words includes “my god oh my god” and “oh my god oh my”. Unsurprisingly, we also see “dunder mifflin this is pam”.</p>
+<pre class="r"><code>episode_text_groups &lt;- 
+  episode_text %&gt;%
+  unnest_tokens(word_group, text, token = &quot;ngrams&quot;, n=5)
+
+word_group_count &lt;-
+  episode_text_groups %&gt;%
+  group_by(word_group) %&gt;%
+  summarise(freq = n()) %&gt;%
+  filter(!is.na(word_group))
+  
+ggplot(word_group_count %&gt;% filter(freq&gt;15)) +
+  geom_bar(aes(reorder(word_group, -freq), freq),
+           alpha = 1, stat = &quot;identity&quot;, fill = &quot;steelblue&quot;) +
+  labs(title=&quot;Most Common Groups of Words&quot;) +
+  labs(x=&quot;Word Group&quot;, y=&quot;Frequency&quot;)  +
+  theme_grey() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+      plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-20-1.png" width="672" /></p>
+<p>Now we will look at word groupings without stop words.</p>
+<pre class="r"><code>episode_text_sep &lt;-
+  episode_text_groups %&gt;%
+  separate(word_group, c(&quot;word_1&quot;, &quot;word_2&quot;, &quot;word_3&quot;, &quot;word_4&quot;, &quot;word_5&quot;), sep = &quot; &quot;)
+
+episode_text_sep_filter &lt;-
+  episode_text_sep %&gt;%
+  filter(!word_1 %in% stop_words$word, 
+         !word_2 %in% stop_words$word,
+         !word_3 %in% stop_words$word,
+         !word_4 %in% stop_words$word,
+         !word_5 %in% stop_words$word)
+
+episode_text_sep_filter %&gt;%
+  count(word_1, word_2, word_3, word_4, word_5, sort = TRUE)</code></pre>
+<pre><code>## # A tibble: 1,617 x 6
+##    word_1 word_2 word_3 word_4 word_5     n
+##    &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;chr&gt;  &lt;int&gt;
+##  1 &lt;NA&gt;   &lt;NA&gt;   &lt;NA&gt;   &lt;NA&gt;   &lt;NA&gt;   20529
+##  2 la     la     la     la     la        22
+##  3 da     na     na     na     na        20
+##  4 beep   beep   beep   beep   beep      19
+##  5 blah   blah   blah   blah   blah      10
+##  6 bum    bum    bum    bum    bum        8
+##  7 ha     ha     ha     ha     ha         8
+##  8 na     na     na     na     na         8
+##  9 whoa   whoa   whoa   whoa   whoa       8
+## 10 nope   nope   nope   nope   nope       7
+## # … with 1,607 more rows</code></pre>
+<p>The “la” word coming up is from singing in a few of the Christmas episodes. The Duel episode is coming up because Dwight imitates Andy as Andy pushes Dwight into a hedge with his car.</p>
+<pre class="r"><code>episode_text_sep_filter %&gt;%
+  filter(word_1 == &quot;la&quot;, word_2 == &quot;la&quot;) %&gt;%
+  distinct(episode_name)</code></pre>
+<pre><code>## # A tibble: 5 x 1
+##   episode_name                    
+##   &lt;chr&gt;                           
+## 1 E-Mail Surveilance              
+## 2 A Benihana Christmas (Parts 1&amp;2)
+## 3 Moroccan Christmas              
+## 4 The Duel                        
+## 5 Heavy Competition</code></pre>
+</div>
+<div id="character-pairs-text-analysis" class="section level2">
+<h2>Character Pairs Text Analysis</h2>
+<p>Now let’s look at words used across character pairs. Michael talks a lot more about Holly and Jan, and Jim talks a lot more about Cece. Michael also says “business” and “corporate” more often. They both mention Pam and Dwight a decent bit, too.</p>
+<pre class="r"><code>charac_word_freq &lt;-
+episode_text_parse %&gt;%
+  filter(!word %in% stop_words$word) %&gt;%
+  group_by(character) %&gt;%
+  count(word, sort = TRUE) %&gt;%
+  left_join(episode_text_parse %&gt;%
+              group_by(character) %&gt;%
+              summarise(total = n()), by = &quot;character&quot;) %&gt;%
+  mutate(freq = n/total)
+  
+charac_word_freq_JM &lt;-
+  charac_word_freq %&gt;%
+  select(character, word, freq) %&gt;%
+  spread(character, freq) %&gt;%
+  arrange(Jim, Michael)
+
+ggplot(charac_word_freq_JM, aes(Jim, Michael)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  geom_abline(color = &quot;red&quot;) +
+  labs(title=&quot;Word Usage Rate Between Character Pairs&quot;) +
+  theme(plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-23-1.png" width="672" /></p>
+<p>Angela, unsurpisigly, uses the word “cat” or “cats” frequently. Also “Dwight”, “Kevin” and “senator”. You can also see “party” and “committee” showing up for her. Dwight has a few words that stick out, like “Jim”, “Schrute”, “paper” and “Ryan”.</p>
+<pre class="r"><code>charac_word_freq_DA &lt;-
+  charac_word_freq %&gt;%
+  select(character, word, freq) %&gt;%
+  spread(character, freq) %&gt;%
+  arrange(Dwight, Angela)
+
+ggplot(charac_word_freq_DA, aes(Dwight, Angela)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  geom_abline(color = &quot;red&quot;) +
+  labs(title=&quot;Word Usage Rate Between Character Pairs&quot;) +
+  theme(plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-24-1.png" width="768" /></p>
+<p>Looking and Kevin and Oscar, Kevin says “yeah”, “cool”, “eat”, and “hot” relatively frequently. Oscar has “gay”, “dollars”, and “sense”. They both talk about Michael a similar amount (which is a lot). Pretty on brand for both of them.</p>
+<pre class="r"><code>charac_word_freq_OK &lt;-
+  charac_word_freq %&gt;%
+  select(character, word, freq) %&gt;%
+  spread(character, freq) %&gt;%
+  arrange(Oscar, Kevin)
+
+ggplot(charac_word_freq_OK, aes(Oscar, Kevin)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  geom_abline(color = &quot;red&quot;) +
+  labs(title=&quot;Word Usage Rate Between Character Pairs&quot;) +
+  theme(plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-25-1.png" width="768" /></p>
+</div>
+<div id="line-adjacencies-who-is-talking-to-who-most-frequently" class="section level2">
+<h2>Line Adjacencies, Who is Talking to Who Most Frequently?</h2>
+<p>The primary characters tend to dominate most conversations but we can pick up on the smaller friendship pairs too, like Oscar and Kevin.</p>
+<pre class="r"><code>episode_text_dialogue &lt;- 
+episode_text %&gt;%
+  group_by(season, episode) %&gt;%
+  mutate(talkingto = lead(character)) %&gt;%
+  group_by(character, talkingto) %&gt;%
+  summarise(freq = n())
+
+keep_chars &lt;- episode_text_dialogue %&gt;%
+  gather(tofrom, person, character:talkingto) %&gt;%
+  group_by(person) %&gt;%
+  summarize(totfreq = sum(freq)) %&gt;%
+  filter(totfreq &gt; 150) %&gt;%
+  pull(person)
+
+ggplot(episode_text_dialogue %&gt;% filter(character %in% keep_chars, talkingto %in% keep_chars), aes(x=character, y=talkingto)) +
+  geom_tile(aes(fill = freq)) +
+  scale_fill_viridis_c(option = &quot;B&quot;, direction = -1) +
+  labs(title = &quot;Characters Most Frequently Conversing&quot;,
+       y = &quot;Person Listening&quot;,
+       x = &quot;Person Talking&quot;) + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title = element_text(hjust = 0.5))</code></pre>
+<p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-26-1.png" width="672" /></p>
+</div>
