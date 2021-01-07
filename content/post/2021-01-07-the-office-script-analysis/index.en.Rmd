@@ -61,8 +61,9 @@ episode_text_parse %>%
   filter(n > 500) %>%
   ggplot(aes(word, n)) +
   geom_col(fill="steelblue") +
-  xlab(NULL) +
-  coord_flip()
+  labs(title="Most Common Words", y = "Frequency", x = "Word") +
+  coord_flip() +
+  theme(plot.title = element_text(size = 18, face = "bold", hjust = 0.5))
 ```
 
 Michael has the most number of lines by far, despite not being in the last two seasons. It's a little surprising to see Andy at the top, since he also wasn't in all of the seasons. It's worth noting that not all of the character names follow the same format. There are character names in quotes ("Angela"), lines the characters said together (Andy & Erin), and hilariously, Goldenface has his own lines.  This chart only includes characters with at least 500 lines over the course of the series.

@@ -47,8 +47,9 @@ episode_text &lt;- schrute::theoffice</code></pre>
   filter(n &gt; 500) %&gt;%
   ggplot(aes(word, n)) +
   geom_col(fill=&quot;steelblue&quot;) +
-  xlab(NULL) +
-  coord_flip()</code></pre>
+  labs(title=&quot;Most Common Words&quot;, y = &quot;Frequency&quot;, x = &quot;Word&quot;) +
+  coord_flip() +
+  theme(plot.title = element_text(size = 18, face = &quot;bold&quot;, hjust = 0.5))</code></pre>
 <p><img src="/post/2021-01-07-the-office-script-analysis/index.en_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
 <p>Michael has the most number of lines by far, despite not being in the last two seasons. It’s a little surprising to see Andy at the top, since he also wasn’t in all of the seasons. It’s worth noting that not all of the character names follow the same format. There are character names in quotes (“Angela”), lines the characters said together (Andy &amp; Erin), and hilariously, Goldenface has his own lines. This chart only includes characters with at least 500 lines over the course of the series.</p>
 <pre class="r"><code>number_of_lines &lt;-
